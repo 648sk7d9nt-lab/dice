@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>숭실 주사위 게임</title>
+<style>
+:root{--bg:#ffe98a;--card:#fff;--fg:#222;--muted:#777;--accent:#e4572e;--ok:#2e9e6b;--line:#e6cf6a;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#3d3510;--card:#242424;--fg:#f0f0f0;--muted:#999;--line:#3a3a3a}}
+:root[data-theme="dark"]{--bg:#3d3510;--card:#242424;--fg:#f0f0f0;--muted:#999;--line:#3a3a3a}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:-apple-system,"Apple SD Gothic Neo","Noto Sans KR",sans-serif;display:flex;justify-content:center;padding:20px 16px}
+main{width:100%;max-width:420px;text-align:center}
+h1{font-size:1.5rem;margin:8px 0 4px}
+.sub{color:var(--muted);font-size:.9rem;margin:0 0 18px}
+.scores{display:flex;gap:12px}
+.p{flex:1;background:var(--card);border:2px solid var(--line);border-radius:14px;padding:12px;transition:.2s}
+.p.active{border-color:var(--accent)}
+.p b{display:block;font-size:.85rem;color:var(--muted)}
+.p span{font-size:2rem;font-weight:700}
+.bar{height:6px;background:var(--line);border-radius:3px;margin-top:8px;overflow:hidden}
+.bar i{display:block;height:100%;width:0;background:var(--ok);transition:.3s}
+.stage{margin:24px 0 8px;display:flex;flex-direction:column;align-items:center;gap:12px}
+.die{width:110px;height:110px;background:#fff;border-radius:20px;box-shadow:0 6px 0 #cfc8b8,0 10px 20px rgba(0,0,0,.2);display:grid;grid-template:repeat(3,1fr)/repeat(3,1fr);padding:14px;gap:2px}
+.die i{border-radius:50%;margin:auto;width:70%;height:70%}
+.die i.on{background:#222}
+.die.one i.on{background:var(--accent)}
+.die.roll{animation:shake .5s}
+@keyframes shake{0%{transform:rotate(0)}25%{transform:rotate(-20deg) translateY(-10px)}50%{transform:rotate(20deg)}75%{transform:rotate(-10deg) translateY(-6px)}100%{transform:rotate(0)}}
+.turn{font-size:1.1rem}
+.turn strong{color:var(--accent);font-size:1.4rem}
+.msg{min-height:1.5em;color:var(--muted);margin:6px 0 14px}
+.btns{display:flex;gap:10px}
+button{flex:1;font:inherit;font-weight:600;padding:14px;border:0;border-radius:12px;cursor:pointer;color:#fff;background:var(--accent)}
+button#roll{background:#2f6fed}
+button.hold{background:var(--ok)}
+button.new{background:var(--muted);margin-top:10px;width:100%}
+button:disabled{opacity:.4;cursor:not-allowed}
+details{margin-top:18px;color:var(--muted);font-size:.85rem;text-align:left}
+</style>
+</head>
+<body>
+<main>
+  <h1>🎲 주사위 게임</h1>
+  <p class="sub">먼저 50점을 만들면 승리!</p>
+  <div class="scores">
+    <div class="p active" id="p0"><b>나</b><span id="s0">0</span><div class="bar"><i id="b0"></i></div></div>
+    <div class="p" id="p1"><b>컴퓨터</b><span id="s1">0</span><div class="bar"><i id="b1"></i></div></div>
+  </div>
+  <div class="stage">
+    <div class="die" id="die"></div>
+    <div class="turn">이번 턴 점수: <strong id="turn">0</strong></div>
+  </div>
+  <div class="msg" id="msg">주사위를 굴려보세요!</div>
+  <div class="btns">
+    <button id="roll">🎲 굴리기</button>
+    <button id="hold" class="hold" disabled>✋ 멈추기</button>
+  </div>
+  <button class="new" id="new">새 게임</button>
+  <details><summary>게임 규칙</summary>
+    <p>굴린 눈만큼 이번 턴 점수가 쌓입니다. '멈추기'를 누르면 점수가 내 총점에 저장되고 턴이 넘어갑니다. 하지만 1이 나오면 이번 턴 점수가 모두 사라지고 턴이 넘어가요!</p>
+  </details>
+</main>
+<script>
+(function(){
+  var GOAL=50, PIPS={1:[4],2:[0,8],3:[0,4,8],4:[0,2,6,8],5:[0,2,4,6,8],6:[0,2,3,5,6,8]};
+  var scores=[0,0], cur=0, turn=0, over=false, busy=false;
+  var $=function(id){return document.getElementById(id)};
+  var die=$('die'), rollBtn=$('roll'), holdBtn=$('hold');
+
+  function drawDie(n){
+    die.className='die'+(n===1?' one':'');
+    die.innerHTML='';
+    for(var i=0;i<9;i++){var d=document.createElement('i');if(PIPS[n].indexOf(i)>-1)d.className='on';die.appendChild(d);}
+  }
+  function render(){
+    for(var i=0;i<2;i++){
+      $('s'+i).textContent=scores[i];
+      $('b'+i).style.width=Math.min(100,scores[i]/GOAL*100)+'%';
+      $('p'+i).classList.toggle('active',cur===i&&!over);
+    }
+    $('turn').textContent=turn;
+    var mine=cur===0&&!over&&!busy;
+    rollBtn.disabled=!mine;
+    holdBtn.disabled=!mine||turn===0;
+  }
+  function msg(t){$('msg').textContent=t}
+  function endTurn(){
+    turn=0;cur=1-cur;render();
+    if(cur===1){busy=true;render();setTimeout(cpuPlay,900);}
+  }
+  function doRoll(cb){
+    busy=true;render();
+    die.classList.remove('roll');void die.offsetWidth;die.classList.add('roll');
+    var n=Math.floor(Math.random()*6)+1, t=0;
+    var iv=setInterval(function(){drawDie(Math.floor(Math.random()*6)+1);die.classList.add('roll');if(++t>=5){clearInterval(iv);drawDie(n);cb(n);}},90);
+  }
+  function hold(){
+    scores[cur]+=turn;turn=0;
+    if(scores[cur]>=GOAL){over=true;busy=false;render();msg(cur===0?'🎉 승리했어요!':'😢 컴퓨터가 이겼어요');return;}
+    render();
+  }
+  function playerRoll(){
+    doRoll(function(n){
+      busy=false;
+      if(n===1){msg('앗, 1이 나왔어요! 점수가 사라졌어요 💥');turn=0;busy=true;render();setTimeout(endTurn,1000);}
+      else{turn+=n;msg(n+' 나왔어요! 계속 굴릴까요?');render();}
+    });
+  }
+  function cpuPlay(){
+    if(over)return;
+    msg('컴퓨터가 굴리는 중...');
+    doRoll(function(n){
+      if(n===1){msg('컴퓨터가 1을 굴렸어요! 😆');turn=0;render();setTimeout(function(){busy=false;endTurn();},1000);return;}
+      turn+=n;render();
+      if(turn>=15||scores[1]+turn>=GOAL){
+        setTimeout(function(){msg('컴퓨터가 '+turn+'점을 저장했어요');hold();if(!over){cur=0;busy=false;render();msg('당신 차례예요!');}},700);
+      }else setTimeout(cpuPlay,800);
+    });
+  }
+  rollBtn.onclick=playerRoll;
+  holdBtn.onclick=function(){hold();if(!over){msg('점수 저장! 컴퓨터 차례...');endTurn();}};
+  function reset(){scores=[0,0];cur=0;turn=0;over=false;busy=false;drawDie(1);die.className='die';msg('주사위를 굴려보세요!');render();}
+  $('new').onclick=reset;
+  reset();
+})();
+</script>
+</body>
+</html>
